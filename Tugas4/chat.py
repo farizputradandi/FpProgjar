@@ -14,7 +14,7 @@ class Chat:
         self.users['lineker'] = { 'nama': 'Gary Lineker', 'negara': 'Inggris', 'password': 'surabaya','incoming': {}, 'outgoing':{}}
         self.users['darke'] = { 'nama': 'Darke Foster', 'negara': 'Canada', 'password': 'prototype', 'incoming' : {}, 'outgoing': {} }
         
-    def proses(self, data):
+    def proses(self, data, connection):
         j = data.split(" ")
         try:
             command = j[0].strip()
@@ -70,6 +70,33 @@ class Chat:
                 sessionid = j[2].strip()
                 print "{} is leaving {}..." . format(self.sessions[sessionid]['username'],group)
                 return self.leave_group(group, sessionid)
+            elif (command == 'sendfile'):
+				sessionid = j[1].strip()
+				usernameto = j[2].strip()
+				filename = j[3].strip()
+				usernamefrom = self.sessions[sessionid]['username']
+				print "sending file from {} to {}" . format(usernamefrom, usernameto)
+				return self.sendfile(sessionid, usernamefrom, usernameto, filename, connection)
+            elif (command == 'recvfile'):
+				sessionid = j[1].strip()
+				filename = j[2].strip()
+				usernamefrom = self.sessions[sessionid]['username']
+				print "{} is downloading {}" . format(usernamefrom, filename)
+				return self.recvfile(sessionid, filename, connection)
+            elif (command == 'sendfile_group'):
+				group = j[1].strip()
+				sessionid = j[2].strip()
+				filename = j[3].strip()
+				usernamefrom = self.sessions[sessionid]['username']
+				print "sending file from {} to {}" . format(usernamefrom, group)
+				return self.sendfile_group(sessionid, usernamefrom, group, filename, connection)
+            elif (command == 'recvfile_group'):
+				group = j[1].strip()
+				sessionid = j[2].strip()
+				filename = j[3].strip()
+				usernamefrom = self.sessions[sessionid]['username']
+				print "{} is downloading file from {}" . format(usernamefrom, group)
+				return self.recvfile_group(sessionid, group, filename, connection)
             else:
                 return {'status' : 'ERROR', 'message' : '**Protocol Tidak Benar'}
         except IndexError:
@@ -164,6 +191,114 @@ class Chat:
             return {'status': 'ERROR', 'message': 'Kamu tidak bergabung di grup'}
         self.groups[group_name]['users'].remove(username)
         return {'status':'OK', 'message':'You left the group'}
+    
+    def sendfile(self, sessionid, username_from, username_dest, filename, connection):
+		if (sessionid not in self.sessions):
+			return {'status': 'ERROR', 'message': 'Session Tidak Ditemukan'}
+		s_fr = self.get_user(username_from)
+		s_to = self.get_user(username_dest)
+
+		if (s_fr==False or s_to==False):
+			return {'status': 'ERROR', 'message': 'User Tidak Ditemukan'}
+
+		try:
+			if not os.path.exists(username_dest):
+				os.makedirs(username_dest)
+			with open(os.path.join(username_dest, filename), 'wb') as file:
+				while True:
+					data = connection.recv(1024)
+					print data
+					if(data[-4:] == 'DONE'):
+						data = data[:-4]
+						file.write(data)
+						break
+					file.write(data)
+				file.close()
+		except IOError:
+			raise
+
+		message = { 'msg_from': s_fr['nama'], 'msg_to': s_to['nama'], 'msg': 'sent/received {}' . format(filename) }
+		outqueue_sender = s_fr['outgoing']
+		inqueue_receiver = s_to['incoming']
+		try:
+			outqueue_sender[username_from].put(message)
+		except KeyError:
+			outqueue_sender[username_from]=Queue()
+			outqueue_sender[username_from].put(message)
+		try:
+			inqueue_receiver[username_from].put(message)
+		except KeyError:
+			inqueue_receiver[username_from]=Queue()
+			inqueue_receiver[username_from].put(message)
+
+		return {'status': 'OK', 'message': 'File sent'}
+
+    def recvfile(self, sessionid, filename, connection):
+		username = self.sessions[sessionid]['username']
+		print "{} is downloading {}" . format(username, filename)
+
+		try:
+			file = open(os.path.join(username, filename), 'rb')
+		except IOError:
+			return {'status': 'Err', 'message': 'File not found'}
+			
+		result = connection.sendall("OK")
+		while True:
+			data = file.read(1024)
+			if not data:
+				result = connection.sendall("DONE")
+				break
+			connection.sendall(data)
+		file.close()
+		return
+    
+    def sendfile_group(self, sessionid, username_from, group_name, filename, connection):
+		if group_name not in self.groups:
+			return {'status': 'ERROR', 'message': 'Group tidak ada'}
+		if username_from not in self.groups[group_name]['users']:
+			return {'status': 'ERROR', 'message': 'Kamu tidak bergabung di grup'}
+
+		try:
+			if not os.path.exists(group_name):
+				os.makedirs(group_name)
+			with open(os.path.join(group_name, filename), 'wb') as file:
+				while True:
+					data = connection.recv(1024)
+					print data
+					if(data[-4:] == 'DONE'):
+						data = data[:-4]
+						file.write(data)
+						break
+					file.write(data)
+				file.close()
+		except IOError:
+			raise
+
+		return {'status': 'OK', 'message': 'File sent'}
+
+    def recvfile_group(self, sessionid, group_name, filename, connection):
+        if group_name not in self.groups:
+			return {'status': 'ERROR', 'message': 'Group tidak ada'}
+        username = self.sessions[sessionid]['username']
+        if username not in self.groups[group_name]['users']:
+			return {'status': 'ERROR', 'message': 'Kamu tidak bergabung di grup'}
+		
+        print "{} is downloading {}" . format(username, filename)
+
+        try:
+			file = open(os.path.join(os.getcwd(), group_name, filename), 'rb')
+        except IOError:
+			return {'status': 'Err', 'message': 'File not found'}
+			
+        result = connection.sendall("OK")
+        while True:
+			data = file.read(1024)
+			if not data:
+				result = connection.sendall("DONE")
+				break
+			connection.sendall(data)
+        file.close()
+        return
 
 if __name__=="__main__":
     j = Chat()

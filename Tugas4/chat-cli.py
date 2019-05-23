@@ -1,6 +1,7 @@
 import socket
 import os
 import json
+import datetime
 
 TARGET_IP = "127.0.0.1"
 TARGET_PORT = 8889
@@ -48,6 +49,21 @@ class ChatClient:
             elif(command=='leave_group'):
                 group = j[1].strip()
                 return self.leave_group(group)
+            elif(command=='sendfile'):
+                usernameto = j[1].strip()
+                filename = j[2].strip()
+                return self.sendfile(usernameto, filename)
+            elif(command=='recvfile'):
+                filename = j[1].strip()
+                return self.recvfile(filename)
+            elif(command=='sendfile_group'):
+                group = j[1].strip()
+                filename = j[2].strip()
+                return self.sendfile_group(group, filename)
+            elif(command=='recvfile_group'):
+                group = j[1].strip()
+                filename = j[2].strip()
+                return self.recvfile_group(group, filename)
 	    else:
 		return "*Maaf, command tidak benar"
 	except IndexError:
@@ -102,10 +118,56 @@ class ChatClient:
             return "{}" . format(json.dumps(result['messages']))
         else:
             return "Error, {}" . format(result['message'])
-    def sendfile():
-        return
-    def recvfile():
-        return
+    def sendfile(self,usernameto,filename):
+        if (self.tokenid==""):
+            return "Error, not authorized"
+        string="sendfile {} {} {} \r\n" . format(self.tokenid,usernameto,filename)
+        #print os.path.join(os.getcwd(),filename)
+        self.sock.sendall(string)
+        
+        try:
+            with open(os.path.join(os.getcwd(),filename), 'rb') as file:
+                while True:
+                    bytes = file.read(1024)
+                    if not bytes:
+                        result = self.sendstring("DONE")
+                        break
+                    self.sock.sendall(bytes)
+                file.close()
+        except IOError:
+            return "Error, file not found"
+        
+        if result['status']=='OK':
+            return "file sent to {}" . format(usernameto)
+        else:
+            return "Error, {}" . format(result['message'])
+    def recvfile(self, filename):
+        if (self.tokenid==""):
+            return "Error, not authorized"
+        string="recvfile {} {} \r\n" . format(self.tokenid,filename)
+        self.sock.sendall(string)
+        
+        data = self.sock.recv(1024)
+        
+        if data[:2]=='OK':
+            print data
+            now = datetime.datetime.now()
+            seconds = (now - datetime.datetime(2019, 1, 1)).total_seconds()
+            file =  open(str(int(seconds)) + filename, 'wb')
+            if(file):
+                file.write(data[2:])
+                while True:
+                    data = self.sock.recv(1024)
+                    if(data[-4:] == 'DONE'):
+                        data = data[:-4]
+                        file.write(data)
+                        break
+                    file.write(data)
+                file.close()
+            else:
+                return "Error, something happened"
+        else:
+            return "Error, file not found"
     def create_group(self, group_name):
         if (self.tokenid==""):
             return "Error, not authorized"
@@ -151,10 +213,55 @@ class ChatClient:
             return "{}" . format(json.dumps(result['message']))
         else:
             return "Error, {}" . format(result['message'])
-    def sendfile_group():
-        return
-    def recvfile_group():
-        return
+    def sendfile_group(self, group_name, filename):
+        if (self.tokenid==""):
+            return "Error, not authorized"
+        string="sendfile_group {} {} {} \r\n" . format(group_name,self.tokenid,filename)
+        self.sock.sendall(string)
+        
+        try:
+            with open(os.path.join(os.getcwd(),filename), 'rb') as file:
+                while True:
+                    bytes = file.read(1024)
+                    if not bytes:
+                        result = self.sendstring("DONE")
+                        break
+                    self.sock.sendall(bytes)
+                file.close()
+        except IOError:
+            return "Error, file not found"
+        
+        if result['status']=='OK':
+            return "file sent to {}" . format(group_name)
+        else:
+            return "Error, {}" . format(result['message'])
+    def recvfile_group(self, group_name, filename):
+        if (self.tokenid==""):
+            return "Error, not authorized"
+        string="recvfile_group {} {} {} \r\n" . format(group_name,self.tokenid,filename)
+        self.sock.sendall(string)
+        
+        data = self.sock.recv(1024)
+        
+        if data[:2]=='OK':
+            print data
+            now = datetime.datetime.now()
+            seconds = (now - datetime.datetime(2019, 1, 1)).total_seconds()
+            file =  open(str(int(seconds)) + filename, 'wb')
+            if(file):
+                file.write(data[2:])
+                while True:
+                    data = self.sock.recv(1024)
+                    if(data[-4:] == 'DONE'):
+                        data = data[:-4]
+                        file.write(data)
+                        break
+                    file.write(data)
+                file.close()
+            else:
+                return "Error, something happened"
+        else:
+            return "Error, file not found"
 
 if __name__=="__main__":
     cc = ChatClient()
