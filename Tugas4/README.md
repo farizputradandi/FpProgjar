@@ -25,7 +25,7 @@
 - [x] `send_group [group_name] [message]`
 - [x] `inbox_group [group_name]`
 - [x] `leave_group [group_name]`
-- [ ] `sendfile [username_to] [file]`
-- [ ] `recvfile [file]`
-- [ ] `sendfile_group [group_name] [file]`
-- [ ] `recvfile_group [group_name] [file]`
+- [x] `sendfile [username_to] [file]`
+- [x] `recvfile [file]`
+- [x] `sendfile_group [group_name] [file]`
+- [x] `recvfile_group [group_name] [file]`
